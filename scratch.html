@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Asteroids!</title>
+
+<!-- Welcome to ZIM at https://zimjs.com - Code Creativity!                              -->
+<!-- ZIM runs on the HTML Canvas powered by JavaScript and CreateJS https://createjs.com -->
+<!-- Founded by Inventor Dan Zen - http://danzen.com - Canadian New Media Award Winner   -->
+<!-- ZIM is free to use. You can donate to help improve ZIM at https://zimjs.com/donate  -->
+
+<script src="https://zimjs.org/cdn/1.2.0/createjs_min.js"></script>
+<script src="https://zimjs.org/cdn/10.5.1/zim.js"></script>
+<!-- use zimjs.com/distill for minified individual functions! -->
+<!-- <embed loop="true" src="assets/happy.wav" hidden="true" type="audio/mpeg"></embed> -->
+
+<script>
+
+// SCALING OPTIONS
+// scaling can have values as follows with full being the default
+// "fit"	sets canvas and stage to dimensions and scales to fit inside window size
+// "outside"	sets canvas and stage to dimensions and scales to fit outside window size
+// "full"	sets stage to window size with no scaling
+// "tagID"	add canvas to HTML tag of ID - set to dimensions if provided - no scaling
+
+var scaling = "fit"; // this will resize to fit inside the screen dimensions
+var width = 1024;
+var height = 768;
+var color = black; // ZIM colors like green, blue, pink, faint, clear, etc.
+var outerColor = dark; // any HTML colors like "violet", "#333", etc. are fine to use
+var asteroidAssets = [];
+// Creating new array set for the new canon images
+var canonAssets = [];
+var score =0;
+
+
+
+loop(7, function(i) {
+  asteroidAssets.push("a" + i + ".png");
+})
+
+// push the images to the canon array
+loop(6, function(i) {
+  canonAssets.push("canon" + i + ".png");
+})
+
+// Concatenate canonAssets additionally
+var assets = asteroidAssets.concat("pod.png", "boom.png", "boom.mp3","bigger.wav","normal.wav", canonAssets);
+var path = "assets/";
+
+var frame = new Frame(scaling, width, height, color, outerColor, assets, path);
+frame.on("ready", function() {
+    zog("ready from ZIM Frame"); // logs in console (F12 - choose console)
+    
+    var stage = frame.stage;
+    var stageW = frame.width;
+    var stageH = frame.height;
+
+    var options = [
+      [-300, rand(stageH), stageW+300, rand(stageH)],
+      [stageW+300, rand(stageH), -300, rand(stageH)],
+      [rand(stageW), -300, rand(stageW), stageH+300],
+      [rand(stageW), stageH+300, rand(stageW), -300]
+    ];
+
+
+    var asteroids = new Container(stageW, stageH).addTo();
+    // To display canons(storing)
+    var canons = new Container(stageW, stageH).addTo();
+
+    interval({min:900, max:1200}, function () {
+      var option = shuffle(options)[0];
+      frame.asset(shuffle(asteroidAssets)[0])
+        .clone()
+        .cur()
+        .centerReg()
+        .loc(option[0], option[1], asteroids)
+        .animate({
+          // props:{rotation:360},
+          // props:{rotation:rand()>.5?-360:360},
+          props:{rotation:[-360, 360]},
+          time:rand(3000,8000),
+          loop:true,
+          ease:"linear"
+        })
+        .animate({
+          props:{x:option[2], y:option[3]},
+          ease:"linear",
+          time:rand(6000, 10000)
+        });
+        
+        // Set the faster movement speed for canons  
+        frame.asset(shuffle(canonAssets)[0])
+        .clone()
+        .cur()
+        .centerReg()
+        .loc(option[0], option[1], canons)
+        .animate({
+          // props:{rotation:360},
+          // props:{rotation:rand()>.5?-360:360},
+          props:{rotation:[-360, 360]},
+          time:rand(1500,3000),
+          loop:true,
+          ease:"linear"
+        })
+        .animate({
+          props:{x:option[2], y:option[3]},
+          ease:"linear",
+          time:rand(3000, 4000)
+        });
+        
+    });
+
+    var explosion = new Sprite(frame.asset("boom.png"), 8, 6).sca(2);
+
+    // var rX = rand(stageW);
+    // var rY = rand(stageH);
+    // var asteroid = frame.asset("a5.png")
+    //   .cur()
+    //   .centerReg()
+    //   .loc(rX, rY)
+    //   .animate({
+    //     props:{rotation:360},
+    //     time:5000,
+    //     loop:true,
+    //     ease:"linear"
+    //   });
+
+
+
+    function explode(obj) {
+      obj.removeFrom();
+      explosion.centerReg().loc(obj).run();
+      frame.asset("boom.mp3").play();
+    }
+    
+    // Bigger the pod size & its sound
+    function resize(obj) {
+      var i = 0.35;
+      obj.sca(i).centerReg();
+      frame.asset("bigger.wav").play();
+    }
+    
+    // Smaller the pod size & its sound
+    function normalSize(obj) {
+      obj.sca(.1).centerReg();
+      frame.asset("normal.wav").play();
+    }
+
+
+
+    var pod = frame.asset("pod.png").sca(.2).centerReg();
+    new MotionController(pod, "keydown", null, null, new Boundary(
+      pod.width/2,
+      pod.height/2,
+      stageW-pod.width,
+      stageH-pod.height
+    ));
+
+
+    var balls = new Container().addTo().bot();
+
+    stage.on("stagemousedown", function (e) {
+      var mouseX = e.stageX/stage.scaleX;
+      var mouseY = e.stageY/stage.scaleY;
+      var laser = new Shape().addTo(stage, 1);
+      laser.graphics.s(pink).ss(4).mt(pod.x, pod.y).lt(mouseX, mouseY);
+      var ball = new Circle(20).addTo(balls).loc(pod).animate({
+        props:{x:mouseX, y:mouseY, scale:3},
+        time:300,
+        ease:"linear",
+        call:function (target) {
+          target.removeFrom();
+          laser.removeFrom();
+        }
+      });
+
+      laser.setMask(ball);
+
+    });
+
+    Ticker.add(function () {
+      // zog("tick");
+      // When asteroids hit pod
+      asteroids.loop(function(asteroid) {
+        if (asteroid.hitTestCircle(pod)) {
+          // zog("hitting")
+          explode(pod);
+        }      
+        balls.loop(function (ball) {
+          if (asteroid.hitTestCircle(ball)) {
+            explode(asteroid);
+          }
+        }, true);       
+      }, true);
+      
+      // when canons hit pod (bigger the size of the pod)
+      canons.loop(function(canon) {
+        if (canon.hitTestCircle(pod)) {
+          // zog("hitting")
+            resize(pod);
+        }         
+      
+      // when beam hits canons (smaller the size of the pod)
+      // speed of beam and color changed
+        balls.loop(function (ball) {
+          if (canon.hitTestCircle(ball)) {
+            normalSize(pod);
+              stage.on("stagemousedown", function (e) {
+              var mouseX = e.stageX/stage.scaleX;
+              var mouseY = e.stageY/stage.scaleY;
+              var laser = new Shape().addTo(stage, 1);
+              laser.graphics.s(blue).ss(4).mt(pod.x, pod.y).lt(mouseX, mouseY);
+              var ball = new Circle(20).addTo(balls).loc(pod).animate({
+                props:{x:mouseX, y:mouseY, scale:3},
+                time:100,
+                ease:"linear",
+                call:function (target) {
+                  target.removeFrom();
+                  laser.removeFrom();
+                }
+              });
+
+              laser.setMask(ball);
+
+            });
+          }
+        }, true);
+      }, true);
+
+    });
+    stage.update(); // this is needed to show any changes
+
+}); // end of ready
+
+</script>
+
+<meta name="viewport" content="width=device-width, user-scalable=no" />
+
+</head>
+
+<body>
+<!-- canvas with id="myCanvas" is made by zim Frame -->
+<!-- <audio autoplay><source src="assets/happy.wav" type="audio/wav"></audio> -->
+</body>
+</html>
